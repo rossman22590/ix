@@ -7,14 +7,10 @@ ENV PATH=$PATH:/usr/bin/ix
 RUN mkdir -p /usr/bin/ix
 COPY bin/* /usr/bin/ix/
 RUN mkdir -p $APP
-RUN apt update -y && apt install -y curl postgresql-client
+RUN apt update -y && apt install -y curl postgresql-client make
 
-# XXX: hacky way of generating a unique key on build, needs to be removed prior to deploy readiness
-# Generate a Django secret key
-# Set the Django secret key
-ENV DJANGO_SECRET_KEY $(date +%s | sha256sum | base64 | head -c 32)
-RUN echo "export DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}" >> /etc/profile
-
+# Pass Django secret key as an environment variable at runtime
+# ENV DJANGO_SECRET_KEY=your-secret-key
 
 # NVM / NPM Setup
 ENV NVM_DIR=/usr/local/nvm
@@ -43,7 +39,6 @@ ENV WEBPACK_OUTPUT=/var/compiled-static
 # Set the working directory
 WORKDIR $APP
 
-
 # Copy requirements.txt to the working directory
 COPY requirements.txt .
 
@@ -53,17 +48,17 @@ RUN pip install -r requirements.txt
 # Copy the rest of the application code to the working directory
 COPY . .
 
+# Copy start.sh script to the working directory
+COPY start.sh .
+
 # Set the environment variable for selecting between ASGI and Celery
 ENV APP_MODE=asgi
+
+# Make start.sh script executable
+RUN chmod +x start.sh
 
 # Expose port 8000 for ASGI, or leave it unexposed for Celery
 EXPOSE 8000
 
-
-WORKDIR /var/app
-
-# Start the application using either ASGI or Celery depending on APP_MODE
-# XXX: disabling until this is tested more
-#CMD if [ "$APP_MODE" = "asgi" ] export ; then python manage.py runserver 0.0.0.0:8000 ; else celery -A myapp worker -l info ; fi
-
-
+# Start the application using the start.sh script
+CMD ["./start.sh"]
